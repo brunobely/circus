@@ -18,7 +18,7 @@
 // }
 
 /* macro so static array sizes can be set */
-#define BUF_SIZE 512
+#define BUF_SIZE 513
 static const int CMD_MAXLEN = 16;
 static const int MAX_PARAMS = 15;
 static const char* SERVER = "irc.freenode.net";
@@ -31,6 +31,7 @@ static const char* USERNAME = "bottybot";
 static const char* REALNAME = "Not a robot";
 
 static int sockfd;
+// TODO: maybe put these inside ircread as static variables?
 static char ircbuf[BUF_SIZE*2];
 static int ircbuf_len;
 
@@ -58,7 +59,7 @@ int user_read();
 int ircread();
 /* Closes sockfd and sets its value to -1 */
 void ircclosesocket();
-int handlemessage(char* msg);
+int handlemessage(const char* message);
 /* Takes a string created by fgets and trims one trailing \n */
 void trim_newline(char *s);
 /* Trims \n and \r characters from the beginning of a string */
@@ -80,7 +81,7 @@ void circus() {
 	if ((server = gethostbyname(SERVER)) == NULL)
 		error("gethostbyname");
 
-	printf("server->h_name: %s\n", server->h_name);
+	debug_print("server->h_name: %s\n", server->h_name);
 
 	memset((char*) &serv_addr, 0, sizeof(serv_addr));
 
@@ -127,7 +128,7 @@ void circus() {
 		ready = select(maxfd+1, &rd_set, &wr_set, &er_set, NULL);
 
 		if (ready) {
-			printf("ready: %d\n", ready);
+			debug_print("ready: %d\n", ready);
 			if (FD_ISSET(stdinfd, &rd_set)) {
 				// /* if user command is !exit or EOF */
 				if ((status = user_read()) < 0)
@@ -166,14 +167,7 @@ int user_read() {
 	if (fgets(buffer, sizeof(buffer), stdin) == NULL)
 		return ERR_BADGET;
 
-	// if ((n = write(sockfd, buffer, strlen(buffer))) < 0)
-	// 	error("writing to socket");
-
-	// memset(buffer, 0, sizeof(buffer));
-	// if ((n = read(sockfd, buffer, strlen(buffer))) < 0)
-	// 	error("reading from socket");
-
-	printf("user - %d: %s\n", sockfd, buffer);
+	debug_print("user - %d: %s\n", sockfd, buffer);
 
 	trim_newline(buffer);
 
@@ -183,6 +177,13 @@ int user_read() {
 	return 0;
 }
 
+/*
+   ircread uses the persistent buffer ircbuf to store what is read from
+   the socket across calls. Any time a newline is found, the function
+   extracts that message from the buffer and calls handlemessage() with
+   it. It does so until there are no more new lines in the permanent
+   buffer.
+*/
 int ircread() {
 	int n;
 	char buffer[BUF_SIZE];
@@ -194,23 +195,23 @@ int ircread() {
 
 	memset(buffer, 0, sizeof(buffer));
 
-	printf("server - %d: ", sockfd);
+	debug_print("server - %d: ", sockfd);
 
 	if ((n = read(sockfd, buffer, sizeof(buffer)-1)) > 0) {
 		buffer[n] = '\0';
-		printf("\n\tircbuf_len: %d\n\n\tn: %d\n", ircbuf_len, n);
+		debug_print("\n\tircbuf_len: %d\n\n\tn: %d\n", ircbuf_len, n);
 		strncpy(ircbuf+ircbuf_len, buffer, n+1); /* n+1 to capture the '\0' */
 		ircbuf_len += n;
 
-		printf("\n\tbuffer: %s|||||\n", buffer);
-		printf("\n\tircbuf: %s|||||\n", ircbuf);
+		debug_print("\n\tbuffer: %s|||||\n", buffer);
+		debug_print("\n\tircbuf: %s|||||\n", ircbuf);
 
 		/* we have a message! */
 		while ((crlf = strpbrk(ircbuf, "\r\n")) != NULL) {
 			int index = crlf - ircbuf;
 			int status;
 		
-			printf("\n\tindex: %d\n", index);
+			debug_print("\n\tindex: %d\n", index);
 
 			strncpy(message, ircbuf, index);
 			message[index] = '\0';
@@ -220,22 +221,21 @@ int ircread() {
 			ircbuf_len -= trim_left(ircbuf);
 			ircbuf[ircbuf_len]='\0';
 
+			debug_print("\n-----> passing message: ||%s||\n", message);
 			if ((status = handlemessage(message)) < 0)
 				return status;
 		}
 	}
-	else if (n == 0) {
-		/* socket closed on other end, close here and try reconnecting */
+	else {
 		ircclosesocket();
-		return ERR_NOSOCKET;
-	}
-	else { /* n < 0 */
-		/* error reading from socket, close socket and try reconnecting */
-		ircclosesocket();
-
-		printf("\n");
-
-		return ERR_BADREAD;
+		if (n == 0) {
+			/* socket closed on other end, close here and try reconnecting */
+			return ERR_NOSOCKET;
+		}
+		else { /* n < 0 */
+			/* error reading from socket, close socket and try reconnecting */
+			return ERR_BADREAD;
+		}
 	}
 
 	return 0;
@@ -243,6 +243,15 @@ int ircread() {
 
 int ircwrite(char* s) {
 	printf("WILL WRITE THIS TO SERVER: %s\n", s);
+	
+	// if ((n = write(sockfd, buffer, strlen(buffer))) < 0)
+	// 	error("writing to socket");
+
+	// memset(buffer, 0, sizeof(buffer));
+	// if ((n = read(sockfd, buffer, strlen(buffer))) < 0)
+	// 	error("reading from socket");
+
+	
 	return 0;
 }
 
@@ -251,11 +260,21 @@ void ircclosesocket() {
 	sockfd = -1;
 }
 
-int handlemessage(char* msg) {
+int handlemessage(const char* message) {
+	int i;
+	char msg[BUF_SIZE]; /* mutable copy of message */
 	char* tok;
 	char command[CMD_MAXLEN];
 	char params[MAX_PARAMS][BUF_SIZE];
 	char response[BUF_SIZE];
+
+	/* initialize strings */
+	strncpy(msg, message, BUF_SIZE-1);
+	msg[BUF_SIZE-1] = '\0'; // TODO: sizeof in all these vs just using each macro?
+	command[0] = '\0';
+	response[0] = '\0';
+	for (i = 0; i < MAX_PARAMS; i++)
+		params[i][0] = '\0';
 
 	// TODO: should I be using strtok_r() here, or is strtok() enough?
 	tok = strtok(msg, " ");
@@ -264,25 +283,34 @@ int handlemessage(char* msg) {
 		tok = strtok(NULL, " ");
 	if (tok == NULL){
 		/* not a message */
-		// TOOD: figure out if errors can actually be seen here and how to handle them
+		// TODO: figure out if errors can actually be seen here and how to handle them
+		printf("[?] Not a message: ");
 		goto print;
 	}
 	strncpy(command, tok, sizeof(command)-1);
 	command[CMD_MAXLEN-1] = '\0';
 	
-	
-	//TODO: get rest of params
-	tok = strtok(NULL, " ");
-	if (tok != NULL) {
-		strncpy(params[0], tok, sizeof(params[0])-1);
-		params[0][BUF_SIZE-1] = '\0';
+	/* get params */
+	i = 0;
+	while ((tok = strtok(NULL, " ")) != NULL && (i <= MAX_PARAMS)) {
+		debug_print("tok: |%s|\n", tok);
+		/* if the param starts with a :, it is the last param and can include spaces */
+		if (tok[0] ==':') {
+			/* copy the token that includes the : (without the :), */
+			/* then add a space and copy the rest of the msg */
+			int toklen = strlen(tok+1);
+			strncpy(params[i], tok+1, BUF_SIZE-1);
+			params[i][toklen] = ' ';
+			strncpy(params[i]+toklen+1, strtok(NULL, ""), BUF_SIZE-1);
+			params[i][BUF_SIZE-1] = '\0';
+			break;
+		}
+		strncpy(params[i], tok, BUF_SIZE-1);
+		params[i][BUF_SIZE-1] = '\0';
+		i++;
 	}
-	else {
-		params[0][0] = '\0';
-	}
-	// while ((tok = strtok(NULL, " ")) != NULL && i++ <= MAX_PARAMS) {
-	// }
 	
+	/* command responses */
 	if (strcmp(command, IRC_PING) == 0) {
 		// TODO: handle errors
 		sprintf(response, "PONG %s\r\n", params[0]);
@@ -290,7 +318,12 @@ int handlemessage(char* msg) {
 	}
 	else
 print:
-		printf("HANDLING MESSAGE: %s\n", msg);
+		printf("HANDLING MESSAGE: %s\n", message);
+		printf("\t COMMAND: %s\n\t PARAMS:\n", command);
+		for (i = 0; i < MAX_PARAMS; i++) {
+			if (strlen(params[i]) > 0)
+				printf("\t\t [%2d]: %s\n", i, params[i]);
+		}
 
 	return 0;
 }
