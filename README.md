@@ -8,7 +8,7 @@ Simple IRC client written in C for self-teaching purposes.
 
 ### Build
 
-```s
+```sh
 $ make # or
 $ make run # builds and runs; or
 $ make debug # uses -g flag and sets -DDEBUG
