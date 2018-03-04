@@ -2,6 +2,6 @@
 
 int main()
 {
-    hello();
+    circus();
     return 0;
 }

@@ -35,5 +35,5 @@ clean:
 	rm -f $(OBJECTS)
 	rm -f $(TARGET)
 
-run: $(TARGET)
+run: default
 	$(TARGET)
