@@ -8,3 +8,5 @@
   * try reconnecting to socket if that happens
 
 -[ ] Call `shutdown()` on sockets before closing?
+
+-[ ] Could a server ever send an invalid message? If so, validate messages

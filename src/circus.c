@@ -11,7 +11,16 @@
 // #include "str.h"
 #include "util.h"
 
-static const int BUF_SIZE = 512;
+// struct ircmsg {
+// 	char prefix[BUF_SIZE];
+// 	char command[CMD_MAXLEN];
+// 	char params[15][BUF_SIZE];
+// }
+
+/* macro so static array sizes can be set */
+#define BUF_SIZE 512
+static const int CMD_MAXLEN = 16;
+static const int MAX_PARAMS = 15;
 static const char* SERVER = "irc.freenode.net";
 static const int PORT = 6667;
 // static const char* CHANNEL = "##bottesting19283746";
@@ -22,10 +31,15 @@ static const char* USERNAME = "bottybot";
 static const char* REALNAME = "Not a robot";
 
 static int sockfd;
+static char ircbuf[BUF_SIZE*2];
+static int ircbuf_len;
 
 /***** user commands *****/
 /* exits the program */
 static const char* COMMAND_EXIT = "!exit";
+
+/***** irc commands *****/
+static const char* IRC_PING = "PING";
 
 /***** error codes *****/
 /* bad socket (e.g. not connected, not valid socket FD) */
@@ -34,7 +48,8 @@ static const int ERR_SOCKETWRITE = -3;
 static const int ERR_BADREAD = -4; /* read() */
 // static const int ERR_BADWRITE = -5; /* write() */
 static const int ERR_BADGET = -6; /* fgets() */
-static const int ERR_BADPUT = -7; /* fputs() */
+// static const int ERR_BADPUT = -7; /* fputs() */
+// static const int ERR_BADMESSAGE = -8; /* error parsing an IRC message */
 
 void circus();
 int ircconnect();
@@ -43,7 +58,11 @@ int user_read();
 int ircread();
 /* Closes sockfd and sets its value to -1 */
 void ircclosesocket();
+int handlemessage(char* msg);
+/* Takes a string created by fgets and trims one trailing \n */
 void trim_newline(char *s);
+/* Trims \n and \r characters from the beginning of a string */
+int trim_left(char *s);
 
 // TODO: clean this up and refactor
 void circus() {
@@ -78,8 +97,9 @@ void circus() {
 
 	if (ircconnect() < 0)
 		error("ircconnect");
-		
 
+	ircbuf[0] = '\0';
+	ircbuf_len = 0;
 	while (1) {
 		int stdinfd = fileno(stdin);
 		int maxfd = stdinfd > sockfd ? stdinfd : sockfd;
@@ -166,6 +186,8 @@ int user_read() {
 int ircread() {
 	int n;
 	char buffer[BUF_SIZE];
+	char message[BUF_SIZE];
+	char* crlf;
 
 	if (sockfd < 0)
 		return ERR_NOSOCKET;
@@ -176,13 +198,36 @@ int ircread() {
 
 	if ((n = read(sockfd, buffer, sizeof(buffer)-1)) > 0) {
 		buffer[n] = '\0';
-		// TODO: don't use fputs as it inserts a newline at the end
-		if (fputs(buffer, stdout) == EOF)
-			return ERR_BADPUT;
+		printf("\n\tircbuf_len: %d\n\n\tn: %d\n", ircbuf_len, n);
+		strncpy(ircbuf+ircbuf_len, buffer, n+1); /* n+1 to capture the '\0' */
+		ircbuf_len += n;
+
+		printf("\n\tbuffer: %s|||||\n", buffer);
+		printf("\n\tircbuf: %s|||||\n", ircbuf);
+
+		/* we have a message! */
+		while ((crlf = strpbrk(ircbuf, "\r\n")) != NULL) {
+			int index = crlf - ircbuf;
+			int status;
+		
+			printf("\n\tindex: %d\n", index);
+
+			strncpy(message, ircbuf, index);
+			message[index] = '\0';
+
+			ircbuf_len -= index;
+			memmove(ircbuf, ircbuf+index, ircbuf_len+1); /* ircbuf_len+1 to capture the '\0' */
+			ircbuf_len -= trim_left(ircbuf);
+			ircbuf[ircbuf_len]='\0';
+
+			if ((status = handlemessage(message)) < 0)
+				return status;
+		}
 	}
 	else if (n == 0) {
 		/* socket closed on other end, close here and try reconnecting */
 		ircclosesocket();
+		return ERR_NOSOCKET;
 	}
 	else { /* n < 0 */
 		/* error reading from socket, close socket and try reconnecting */
@@ -196,14 +241,78 @@ int ircread() {
 	return 0;
 }
 
+int ircwrite(char* s) {
+	printf("WILL WRITE THIS TO SERVER: %s\n", s);
+	return 0;
+}
+
 void ircclosesocket() {
 	close(sockfd);
 	sockfd = -1;
 }
 
-/* s: NUL-terminated string */
-void trim_newline(char *s) {
+int handlemessage(char* msg) {
+	char* tok;
+	char command[CMD_MAXLEN];
+	char params[MAX_PARAMS][BUF_SIZE];
+	char response[BUF_SIZE];
+
+	// TODO: should I be using strtok_r() here, or is strtok() enough?
+	tok = strtok(msg, " ");
+	/* if the message starts with a :, first part is the prefix */
+	if (msg[0] == ':')
+		tok = strtok(NULL, " ");
+	if (tok == NULL){
+		/* not a message */
+		// TOOD: figure out if errors can actually be seen here and how to handle them
+		goto print;
+	}
+	strncpy(command, tok, sizeof(command)-1);
+	command[CMD_MAXLEN-1] = '\0';
+	
+	
+	//TODO: get rest of params
+	tok = strtok(NULL, " ");
+	if (tok != NULL) {
+		strncpy(params[0], tok, sizeof(params[0])-1);
+		params[0][BUF_SIZE-1] = '\0';
+	}
+	else {
+		params[0][0] = '\0';
+	}
+	// while ((tok = strtok(NULL, " ")) != NULL && i++ <= MAX_PARAMS) {
+	// }
+	
+	if (strcmp(command, IRC_PING) == 0) {
+		// TODO: handle errors
+		sprintf(response, "PONG %s\r\n", params[0]);
+		ircwrite(response);
+	}
+	else
+print:
+		printf("HANDLING MESSAGE: %s\n", msg);
+
+	return 0;
+}
+
+/*
+   PARAMS:
+   - s: a NUL-terminated string
+*/
+void trim_newline(char* s) {
 	int l = strlen(s);
 	if (s[l-1] == '\n')
 		s[l-1] = '\0';
+}
+
+int trim_left(char* s) {
+	int len;
+	int i = 0;
+	while ((s[0] == '\n' || s[0] == '\r') && (len = strlen(s)) > 0) {
+		memmove(s, s+1, len);
+		s[len]='\0';
+		i++;
+	}
+
+	return i;
 }
