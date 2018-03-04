@@ -1,5 +1,5 @@
-# CIRCUS
-![cIRCus](./logo.png)
+# Circus
+<img width="200" alt="Circus logo" src="./logo.png">
 -----
 
 Simple IRC client written in C for self-teaching purposes.
