@@ -21,7 +21,7 @@ $(DIRS):
 	mkdir -p $@
 
 debug: CFLAGS += -DDEBUG -g
-debug: $(TARGET)
+debug: default
 
 $(OBJ)/%.o: $(SRC)/%.c $(HEADERS)
 	$(CC) $(CFLAGS) -c $< -o $@
