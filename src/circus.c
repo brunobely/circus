@@ -60,10 +60,6 @@ int ircread();
 /* Closes sockfd and sets its value to -1 */
 void ircclosesocket();
 int handlemessage(const char* message);
-/* Takes a string created by fgets and trims one trailing \n */
-void trim_newline(char *s);
-/* Trims \n and \r characters from the beginning of a string */
-int trim_left(char *s);
 
 // TODO: clean this up and refactor
 void circus() {
@@ -125,6 +121,7 @@ void circus() {
 		// FD_SET(stdinfd, &wr_set);
 		// FD_SET(stdinfd, &er_set);
 
+		debug_print("test\n", NULL);
 		ready = select(maxfd+1, &rd_set, &wr_set, &er_set, NULL);
 
 		if (ready) {
@@ -296,15 +293,30 @@ int handlemessage(const char* message) {
 		debug_print("tok: |%s|\n", tok);
 		/* if the param starts with a :, it is the last param and can include spaces */
 		if (tok[0] ==':') {
+			int toklen;
+			char* rest;
+
+			debug_print("i: %d\n", i);
+			toklen = strlen(tok+1);
+			rest = strtok(NULL, "");
+
 			/* copy the token that includes the : (without the :), */
-			/* then add a space and copy the rest of the msg */
-			int toklen = strlen(tok+1);
+			debug_print("toklen: %d  rest: %s\n", toklen, rest);
 			strncpy(params[i], tok+1, BUF_SIZE-1);
-			params[i][toklen] = ' ';
-			strncpy(params[i]+toklen+1, strtok(NULL, ""), BUF_SIZE-1);
-			params[i][BUF_SIZE-1] = '\0';
+			debug_print("params[%d]: %s\n", i, params[i]);
+
+			/* then, if there is more, add a space and copy the rest of the msg */
+			if (rest != NULL) {
+				debug_print("here %d\n", i);
+				params[i][toklen] = ' ';
+				strncpy(params[i]+toklen+1, rest, BUF_SIZE-toklen-1);
+				params[i][BUF_SIZE-1] = '\0';
+				debug_print("here %d\n", i);
+			}
+
 			break;
 		}
+		debug_print("here %d\n", i);
 		strncpy(params[i], tok, BUF_SIZE-1);
 		params[i][BUF_SIZE-1] = '\0';
 		i++;
@@ -326,26 +338,4 @@ print:
 		}
 
 	return 0;
-}
-
-/*
-   PARAMS:
-   - s: a NUL-terminated string
-*/
-void trim_newline(char* s) {
-	int l = strlen(s);
-	if (s[l-1] == '\n')
-		s[l-1] = '\0';
-}
-
-int trim_left(char* s) {
-	int len;
-	int i = 0;
-	while ((s[0] == '\n' || s[0] == '\r') && (len = strlen(s)) > 0) {
-		memmove(s, s+1, len);
-		s[len]='\0';
-		i++;
-	}
-
-	return i;
 }

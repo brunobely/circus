@@ -14,4 +14,10 @@
 
 void error(char* msg);
 
+/* Takes a string created by fgets and trims one trailing \n */
+void trim_newline(char *s);
+
+/* Trims \n and \r characters from the beginning of a string */
+int trim_left(char *s);
+
 #endif
