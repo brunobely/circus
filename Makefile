@@ -10,7 +10,7 @@ TARGET = $(BIN)/circus
 CC = gcc
 CFLAGS = -Wall -Wextra -Werror -std=c99 -pedantic
 
-.PHONY: default all clean run debug dirs
+.PHONY: default all clean run debug dirs rund
 
 default: dirs $(TARGET)
 all: default
@@ -36,4 +36,7 @@ clean:
 	rm -f $(TARGET)
 
 run: default
+	$(TARGET)
+
+rund: debug
 	$(TARGET)
