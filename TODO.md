@@ -13,3 +13,5 @@
 
 - [ ] Improve `ircread()` code to handle the case that no `\n`/`\r` is found within `BUF_SIZE * 2` characters
   * [https://stackoverflow.com/questions/6090594/c-recv-read-until-newline-occurs](See the accepted answer here)
+
+- [ ] Implement a "command queue" that will hold commands to be written to the server in the order they were issued, and to be written whenever the server socket is ready for writing

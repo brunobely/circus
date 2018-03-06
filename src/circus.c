@@ -7,9 +7,11 @@
 #include <netdb.h> /* hostent */
 #include <string.h> /* memset, memcpy */
 
+#include "constants.h"
 #include "circus.h"
 // #include "str.h"
 #include "util.h"
+#include "message_q.h"
 
 // struct ircmsg {
 // 	char prefix[BUF_SIZE];
@@ -17,37 +19,13 @@
 // 	char params[15][BUF_SIZE];
 // }
 
-/* macro so static array sizes can be set */
-#define BUF_SIZE 513
-static const int CMD_MAXLEN = 16;
-static const int MAX_PARAMS = 15;
-static const char* SERVER = "irc.freenode.net";
-static const int PORT = 6667;
-// static const char* CHANNEL = "##bottesting19283746";
-static const char* NICKNAME = "Gertrudes";
-static const char* USERNAME = "bottybot";
-// static const char* HOSTNAME = "host?";
-// static const char* SERVERNAME = "server?";
-static const char* REALNAME = "Not a robot";
-
-static int sockfd;
-// TODO: maybe put these inside ircread as static variables?
-static char ircbuf[BUF_SIZE*2];
-static int ircbuf_len;
-
-/***** user commands *****/
-/* exits the program */
-static const char* COMMAND_EXIT = "!exit";
-
-/***** irc commands *****/
-static const char* IRC_PING = "PING";
-
+// TODO: move to an error.c file and make a function to get error string from error code
 /***** error codes *****/
 /* bad socket (e.g. not connected, not valid socket FD) */
 static const int ERR_NOSOCKET = -2;
 static const int ERR_SOCKETWRITE = -3;
 static const int ERR_BADREAD = -4; /* read() */
-// static const int ERR_BADWRITE = -5; /* write() */
+static const int ERR_BADWRITE = -5; /* write() */
 static const int ERR_BADGET = -6; /* fgets() */
 // static const int ERR_BADPUT = -7; /* fputs() */
 // static const int ERR_BADMESSAGE = -8; /* error parsing an IRC message */
@@ -111,11 +89,11 @@ void circus() {
 
 		/* empty the fd sets */
 		FD_ZERO(&rd_set);
-		// FD_ZERO(&wr_set);
+		FD_ZERO(&wr_set);
 		// FD_ZERO(&er_set);
 		/* select on read, write, and error for the socket or stdin */
 		FD_SET(sockfd, &rd_set);
-		// FD_SET(sockfd, &wr_set);
+		FD_SET(sockfd, &wr_set);
 		// FD_SET(sockfd, &er_set);
 		FD_SET(stdinfd, &rd_set);
 		// FD_SET(stdinfd, &wr_set);
@@ -127,20 +105,31 @@ void circus() {
 		if (ready) {
 			debug_print("ready: %d\n", ready);
 			if (FD_ISSET(stdinfd, &rd_set)) {
-				// /* if user command is !exit or EOF */
-				if ((status = user_read()) < 0)
-					fprintf(stderr, "error: user_read\n");
-				else if (status > 0)
+				status = user_read();
+
+				/* if user command is !exit or EOF */
+				// TODO: the EOF part
+				if (status == CCODE_EXIT)
+					// TODO: call ircexit()
 					break;
+				// TODO: get the actual error here
+				else if (status < 0)
+					fprintf(stderr, "error: user_read\n");
 			}
 			if (FD_ISSET(sockfd, &rd_set)) {
-				if ((status = ircread()) < 0)
-					fprintf(stderr, "error: ircread\n");
+				status = ircread();
 				if (status == ERR_NOSOCKET) {
 					// TODO: try reconnecting
 					printf("No socket, exiting.\n");
 					exit(1);
 				}
+				else if (status < 0)
+					fprintf(stderr, "unknown error: ircread\n");
+			}
+			if (FD_ISSET(sockfd, &wr_set)) {
+				status = ircsendcommand(cmdq_dequeue());
+				if (status < 0)
+					fprintf(stderr, "error: ircsendcommand\n");
 			}
 		}
 		else {
@@ -169,7 +158,7 @@ int user_read() {
 	trim_newline(buffer);
 
 	if (strcmp(buffer, COMMAND_EXIT) == 0)
-		return 1;
+		return CCODE_EXIT;
 
 	return 0;
 }
@@ -239,15 +228,25 @@ int ircread() {
 }
 
 int ircwrite(char* s) {
-	int n;
-
 	printf("SENDING THIS TO SERVER: %s\n", s);
-
-	if ((n = write(sockfd, s, strlen(s))) < 0) {
-		return -1;
+	if (write(sockfd, s, strlen(s)) < 0) {
+		return ERR_BADWRITE;
 	}
-
 	return 0;
+}
+
+int ircsendmessage(struct irc_message m) {
+	// TODO: implement
+	return 0;
+}
+
+int ircjoinch(char* ch) {
+	char buffer[BUF_SIZE];
+	sprintf(buffer, "JOIN %s\r\n", ch);
+	
+	// TODO: store list of users in a data structure to allow later querying
+
+	return ircwrite(buffer);
 }
 
 void ircclosesocket() {
@@ -325,8 +324,7 @@ int handlemessage(const char* message) {
 		// TODO: handle errors
 		sprintf(response, "PONG %s\r\n", params[0]);
 		// TODO: store messages in a buffer to be sent whenever socket is ready to be written to so this doesn't block
-		if (ircwrite(response) < 0)
-			error("ircwrite");
+		return ircwrite(response);
 	}
 	else
 print:
