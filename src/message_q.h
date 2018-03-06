@@ -12,6 +12,7 @@ struct irc_message {
 	char prefix[BUF_SIZE];
 	char command[CMD_MAXLEN];
 	char params[MAX_PARAMS][BUF_SIZE];
+	int n_params;
 };
 
 struct qnode {
@@ -36,5 +37,7 @@ int isempty(struct message_q* q);
 
 /* for debugging purposes */
 void printq(struct message_q* q);
+
+void msgtostring(char* dest, struct irc_message m);
 
 #endif

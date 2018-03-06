@@ -1,0 +1,11 @@
+const char* SERVER = "irc.freenode.net";
+const int PORT = 6667;
+const char* CHANNEL = "##bottesting19283746";
+const char* NICKNAME = "Gertrudes";
+const char* USERNAME = "bottybot";
+const char* HOSTNAME = "host?";
+const char* SERVERNAME = "server?";
+const char* REALNAME = "Not a robot";
+const char* COMMAND_EXIT = "!exit";
+const int CCODE_EXIT = 1;
+const char* IRC_PING = "PING";

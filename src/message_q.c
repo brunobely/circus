@@ -1,5 +1,7 @@
 #include <stdlib.h> /* NULL, malloc */
 #include <stdio.h>
+#include <string.h>
+
 #include "message_q.h"
 
 struct message_q* message_q() {
@@ -51,7 +53,22 @@ void printq(struct message_q* q) {
     struct qnode* n = q->first;
     printf("Queue:\n");
     while (n != NULL) {
-        printf("  - %s\n", n->message);
+        char msg[BUF_SIZE];
+        msgtostring(msg, n->message);
+        printf("  - %s\n", msg);
         n = n->next;
     }
+}
+
+void msgtostring(char* dest, struct irc_message m) {
+	char params[BUF_SIZE];
+	params[0] = '\0';
+	
+	for (int i = 0; i < m.n_params; i++) {
+		if (i > 0)
+			strcat(params, " ");
+		strcat(params, m.params[i]);
+	}
+
+	sprintf(dest, "%s %s %s\r\n", m.prefix, m.command, params);
 }

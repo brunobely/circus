@@ -2,30 +2,27 @@
 #define HEADER_CONSTANTS
 
 /* macro so static array sizes can be set */
+// TODO: maybe rename to MSG_MAXSIZE
 #define BUF_SIZE 513
 #define CMD_MAXLEN 16
 #define MAX_PARAMS 15
 
-const char* SERVER = "irc.freenode.net";
-const int PORT = 6667;
-// const char* CHANNEL = "##bottesting19283746";
-const char* NICKNAME = "Gertrudes";
-const char* USERNAME = "bottybot";
-// const char* HOSTNAME = "host?";
-// const char* SERVERNAME = "server?";
-const char* REALNAME = "Not a robot";
-
-int sockfd;
-// TODO: maybe put these inside ircread as static variables?
-char ircbuf[BUF_SIZE*2];
-int ircbuf_len;
+// https://stackoverflow.com/a/3088268/3403247
+extern const char* SERVER;
+extern const int PORT;
+extern const char* CHANNEL;
+extern const char* NICKNAME;
+extern const char* USERNAME;
+extern const char* HOSTNAME;
+extern const char* SERVERNAME;
+extern const char* REALNAME;
 
 /***** user commands and their command codes *****/
 /* exits the program */
-const char* COMMAND_EXIT = "!exit";
-const int CCODE_EXIT = 1;
+extern const char* COMMAND_EXIT;
+extern const int CCODE_EXIT;
 
 /***** irc commands *****/
-const char* IRC_PING = "PING";
+extern const char* IRC_PING;
 
 #endif

@@ -19,6 +19,12 @@
 // 	char params[15][BUF_SIZE];
 // }
 
+int sockfd;
+// TODO: maybe put these inside ircread as static variables?
+char ircbuf[BUF_SIZE*2];
+int ircbuf_len;
+struct message_q* q;
+
 // TODO: move to an error.c file and make a function to get error string from error code
 /***** error codes *****/
 /* bad socket (e.g. not connected, not valid socket FD) */
@@ -35,6 +41,8 @@ int ircconnect();
 /* Returns -1 on error, 0 on success, 1 on !exit command */
 int user_read();
 int ircread();
+int ircwrite(char* s);
+int ircsendmessage(struct irc_message m);
 /* Closes sockfd and sets its value to -1 */
 void ircclosesocket();
 int handlemessage(const char* message);
@@ -46,6 +54,8 @@ void circus() {
 	struct sockaddr_in serv_addr;
 	struct hostent* server;
 
+	// TODO: free this before exiting?
+	q = message_q();
 	// char buffer[BUF_SIZE];
 
 	// TODO: handle errors properly
@@ -127,9 +137,14 @@ void circus() {
 					fprintf(stderr, "unknown error: ircread\n");
 			}
 			if (FD_ISSET(sockfd, &wr_set)) {
-				status = ircsendcommand(cmdq_dequeue());
-				if (status < 0)
-					fprintf(stderr, "error: ircsendcommand\n");
+				struct irc_message m;
+
+				/* if there are messages in the queue */
+				if (dequeue(q, &m)) {
+					status = ircsendmessage(m);
+					if (status < 0)
+						fprintf(stderr, "error: ircsendmessage\n");
+				}
 			}
 		}
 		else {
@@ -236,17 +251,18 @@ int ircwrite(char* s) {
 }
 
 int ircsendmessage(struct irc_message m) {
-	// TODO: implement
-	return 0;
+	char msg[BUF_SIZE];
+	msgtostring(msg, m);
+	return ircwrite(msg);
 }
 
 int ircjoinch(char* ch) {
-	char buffer[BUF_SIZE];
-	sprintf(buffer, "JOIN %s\r\n", ch);
-	
+	struct irc_message m;
+	strcpy(m.command, "JOIN");
+	strncpy(m.params[0], ch, BUF_SIZE-1);
+	m.n_params = 1;
 	// TODO: store list of users in a data structure to allow later querying
-
-	return ircwrite(buffer);
+	return ircsendmessage(m);
 }
 
 void ircclosesocket() {
@@ -258,6 +274,7 @@ int handlemessage(const char* message) {
 	int i;
 	char msg[BUF_SIZE]; /* mutable copy of message */
 	char* tok;
+	// char prefix[CMD_MAXLEN];
 	char command[CMD_MAXLEN];
 	char params[MAX_PARAMS][BUF_SIZE];
 	char response[BUF_SIZE];
@@ -265,6 +282,7 @@ int handlemessage(const char* message) {
 	/* initialize strings */
 	strncpy(msg, message, BUF_SIZE-1);
 	msg[BUF_SIZE-1] = '\0'; // TODO: sizeof in all these vs just using each macro?
+	// prefix[0] = '\0';
 	command[0] = '\0';
 	response[0] = '\0';
 	for (i = 0; i < MAX_PARAMS; i++)
@@ -273,8 +291,10 @@ int handlemessage(const char* message) {
 	// TODO: should I be using strtok_r() here, or is strtok() enough?
 	tok = strtok(msg, " ");
 	/* if the message starts with a :, first part is the prefix */
-	if (msg[0] == ':')
+	if (msg[0] == ':') {
+		// strncpy(prefix, tok, sizeof(prefix)-1);
 		tok = strtok(NULL, " ");
+	}
 	if (tok == NULL){
 		/* not a message */
 		// TODO: figure out if errors can actually be seen here and how to handle them
@@ -322,9 +342,13 @@ int handlemessage(const char* message) {
 	/* command responses */
 	if (strcmp(command, IRC_PING) == 0) {
 		// TODO: handle errors
-		sprintf(response, "PONG %s\r\n", params[0]);
-		// TODO: store messages in a buffer to be sent whenever socket is ready to be written to so this doesn't block
-		return ircwrite(response);
+		struct irc_message m;
+		strcpy(m.command, "PONG");
+		strncpy(m.params[0], params[0], BUF_SIZE-1);
+		m.n_params = 1;
+		enqueue(q, m);
+		// sprintf(response, "PONG %s\r\n", params[0]);
+		// return ircwrite(response);
 	}
 	else
 print:
