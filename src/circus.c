@@ -239,16 +239,14 @@ int ircread() {
 }
 
 int ircwrite(char* s) {
-	printf("WILL WRITE THIS TO SERVER: %s\n", s);
-	
-	// if ((n = write(sockfd, buffer, strlen(buffer))) < 0)
-	// 	error("writing to socket");
+	int n;
 
-	// memset(buffer, 0, sizeof(buffer));
-	// if ((n = read(sockfd, buffer, strlen(buffer))) < 0)
-	// 	error("reading from socket");
+	printf("SENDING THIS TO SERVER: %s\n", s);
 
-	
+	if ((n = write(sockfd, s, strlen(s))) < 0) {
+		return -1;
+	}
+
 	return 0;
 }
 
@@ -326,7 +324,9 @@ int handlemessage(const char* message) {
 	if (strcmp(command, IRC_PING) == 0) {
 		// TODO: handle errors
 		sprintf(response, "PONG %s\r\n", params[0]);
-		ircwrite(response);
+		// TODO: store messages in a buffer to be sent whenever socket is ready to be written to so this doesn't block
+		if (ircwrite(response) < 0)
+			error("ircwrite");
 	}
 	else
 print:
