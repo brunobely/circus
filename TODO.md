@@ -15,3 +15,6 @@
   * [https://stackoverflow.com/questions/6090594/c-recv-read-until-newline-occurs](See the accepted answer here)
 
 - [x] Implement a "message queue" that will hold messages to be sent to the server in the order they were issued whenever the server socket is ready for writing
+
+- [ ] Use recursive `make`
+  * [See this GNU Make Reference Manual page](https://www.gnu.org/software/make/manual/html_node/Recursion.html)

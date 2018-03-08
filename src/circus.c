@@ -10,35 +10,25 @@
 #include "constants.h"
 #include "circus.h"
 // #include "str.h"
+#include "error.h"
 #include "util.h"
 #include "message_q.h"
 
 // struct ircmsg {
-// 	char prefix[BUF_SIZE];
+// 	char prefix[MSG_MAXSIZE];
 // 	char command[CMD_MAXLEN];
-// 	char params[15][BUF_SIZE];
+// 	char params[15][MSG_MAXSIZE];
 // }
 
 int sockfd;
 // TODO: maybe put these inside ircread as static variables?
-char ircbuf[BUF_SIZE*2];
+char ircbuf[MSG_MAXSIZE*2];
 int ircbuf_len;
 struct message_q* q;
 
-// TODO: move to an error.c file and make a function to get error string from error code
-/***** error codes *****/
-/* bad socket (e.g. not connected, not valid socket FD) */
-static const int ERR_NOSOCKET = -2;
-static const int ERR_SOCKETWRITE = -3;
-static const int ERR_BADREAD = -4; /* read() */
-static const int ERR_BADWRITE = -5; /* write() */
-static const int ERR_BADGET = -6; /* fgets() */
-// static const int ERR_BADPUT = -7; /* fputs() */
-// static const int ERR_BADMESSAGE = -8; /* error parsing an IRC message */
-
 void circus();
 int ircconnect();
-/* Returns -1 on error, 0 on success, 1 on !exit command */
+/* Returns -1 on error, 0 on success, CCODE_EXIT on !exit command */
 int user_read();
 int ircread();
 int ircwrite(char* s);
@@ -56,7 +46,7 @@ void circus() {
 
 	// TODO: free this before exiting?
 	q = message_q();
-	// char buffer[BUF_SIZE];
+	// char buffer[MSG_MAXSIZE];
 
 	// TODO: handle errors properly
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
@@ -154,7 +144,7 @@ void circus() {
 }
 
 int ircconnect() {
-	char buffer[BUF_SIZE];
+	char buffer[MSG_MAXSIZE];
 	sprintf(buffer, "NICK %s\r\nUSER %s 0 * :%s\r\n", NICKNAME, USERNAME, REALNAME);
 	if (write(sockfd, buffer, strlen(buffer)) < 0)
 		return ERR_SOCKETWRITE;
@@ -163,7 +153,7 @@ int ircconnect() {
 }
 
 int user_read() {
-	char buffer[BUF_SIZE];
+	char buffer[MSG_MAXSIZE];
 	memset(buffer, 0, sizeof(buffer));
 	if (fgets(buffer, sizeof(buffer), stdin) == NULL)
 		return ERR_BADGET;
@@ -187,8 +177,8 @@ int user_read() {
 */
 int ircread() {
 	int n;
-	char buffer[BUF_SIZE];
-	char message[BUF_SIZE];
+	char buffer[MSG_MAXSIZE];
+	char message[MSG_MAXSIZE];
 	char* crlf;
 
 	if (sockfd < 0)
@@ -251,7 +241,7 @@ int ircwrite(char* s) {
 }
 
 int ircsendmessage(struct irc_message m) {
-	char msg[BUF_SIZE];
+	char msg[MSG_MAXSIZE];
 	msgtostring(msg, m);
 	return ircwrite(msg);
 }
@@ -259,7 +249,7 @@ int ircsendmessage(struct irc_message m) {
 int ircjoinch(char* ch) {
 	struct irc_message m;
 	strcpy(m.command, "JOIN");
-	strncpy(m.params[0], ch, BUF_SIZE-1);
+	strncpy(m.params[0], ch, MSG_MAXSIZE-1);
 	m.n_params = 1;
 	// TODO: store list of users in a data structure to allow later querying
 	return ircsendmessage(m);
@@ -272,16 +262,16 @@ void ircclosesocket() {
 
 int handlemessage(const char* message) {
 	int i;
-	char msg[BUF_SIZE]; /* mutable copy of message */
+	char msg[MSG_MAXSIZE]; /* mutable copy of message */
 	char* tok;
 	// char prefix[CMD_MAXLEN];
 	char command[CMD_MAXLEN];
-	char params[MAX_PARAMS][BUF_SIZE];
-	char response[BUF_SIZE];
+	char params[MAX_PARAMS][MSG_MAXSIZE];
+	char response[MSG_MAXSIZE];
 
 	/* initialize strings */
-	strncpy(msg, message, BUF_SIZE-1);
-	msg[BUF_SIZE-1] = '\0'; // TODO: sizeof in all these vs just using each macro?
+	strncpy(msg, message, MSG_MAXSIZE-1);
+	msg[MSG_MAXSIZE-1] = '\0'; // TODO: sizeof in all these vs just using each macro?
 	// prefix[0] = '\0';
 	command[0] = '\0';
 	response[0] = '\0';
@@ -319,23 +309,23 @@ int handlemessage(const char* message) {
 
 			/* copy the token that includes the : (without the :), */
 			debug_print("toklen: %d  rest: %s\n", toklen, rest);
-			strncpy(params[i], tok+1, BUF_SIZE-1);
+			strncpy(params[i], tok+1, MSG_MAXSIZE-1);
 			debug_print("params[%d]: %s\n", i, params[i]);
 
 			/* then, if there is more, add a space and copy the rest of the msg */
 			if (rest != NULL) {
 				debug_print("here %d\n", i);
 				params[i][toklen] = ' ';
-				strncpy(params[i]+toklen+1, rest, BUF_SIZE-toklen-1);
-				params[i][BUF_SIZE-1] = '\0';
+				strncpy(params[i]+toklen+1, rest, MSG_MAXSIZE-toklen-1);
+				params[i][MSG_MAXSIZE-1] = '\0';
 				debug_print("here %d\n", i);
 			}
 
 			break;
 		}
 		debug_print("here %d\n", i);
-		strncpy(params[i], tok, BUF_SIZE-1);
-		params[i][BUF_SIZE-1] = '\0';
+		strncpy(params[i], tok, MSG_MAXSIZE-1);
+		params[i][MSG_MAXSIZE-1] = '\0';
 		i++;
 	}
 	
@@ -344,7 +334,7 @@ int handlemessage(const char* message) {
 		// TODO: handle errors
 		struct irc_message m;
 		strcpy(m.command, "PONG");
-		strncpy(m.params[0], params[0], BUF_SIZE-1);
+		strncpy(m.params[0], params[0], MSG_MAXSIZE-1);
 		m.n_params = 1;
 		enqueue(q, m);
 		// sprintf(response, "PONG %s\r\n", params[0]);

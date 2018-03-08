@@ -4,14 +4,14 @@
 #include <stdbool.h>
 #include "constants.h"
 
-// TODO: this is very space inefficient. maybe use one BUF_SIZE string
+// TODO: this is very space inefficient. maybe use one MSG_MAXSIZE string
 //       and indices to when each segment begins and ends, and implement
 //       a parsemessage function that creates the struct, along with functions
 //       to get each segment
 struct irc_message {
-	char prefix[BUF_SIZE];
+	char prefix[MSG_MAXSIZE];
 	char command[CMD_MAXLEN];
-	char params[MAX_PARAMS][BUF_SIZE];
+	char params[MAX_PARAMS][MSG_MAXSIZE];
 	int n_params;
 };
 
@@ -33,7 +33,7 @@ void enqueue(struct message_q* q, struct irc_message msg);
 /* returns true if successful (i.e. queue not empty), false otherwise */
 bool dequeue(struct message_q* q, struct irc_message* out);
 
-int isempty(struct message_q* q);
+bool isempty(struct message_q* q);
 
 /* for debugging purposes */
 void printq(struct message_q* q);

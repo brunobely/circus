@@ -2,8 +2,7 @@
 #define HEADER_CONSTANTS
 
 /* macro so static array sizes can be set */
-// TODO: maybe rename to MSG_MAXSIZE
-#define BUF_SIZE 513
+#define MSG_MAXSIZE 513
 #define CMD_MAXLEN 16
 #define MAX_PARAMS 15
 

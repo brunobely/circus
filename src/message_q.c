@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "error.h"
 #include "message_q.h"
 
 struct message_q* message_q() {
@@ -44,7 +45,7 @@ bool dequeue(struct message_q* q, struct irc_message* out) {
     return false;
 }
 
-int isempty(struct message_q* q) {
+bool isempty(struct message_q* q) {
     return q->first == NULL;
 }
 
@@ -53,7 +54,7 @@ void printq(struct message_q* q) {
     struct qnode* n = q->first;
     printf("Queue:\n");
     while (n != NULL) {
-        char msg[BUF_SIZE];
+        char msg[MSG_MAXSIZE];
         msgtostring(msg, n->message);
         printf("  - %s\n", msg);
         n = n->next;
@@ -61,7 +62,7 @@ void printq(struct message_q* q) {
 }
 
 void msgtostring(char* dest, struct irc_message m) {
-	char params[BUF_SIZE];
+	char params[MSG_MAXSIZE];
 	params[0] = '\0';
 	
 	for (int i = 0; i < m.n_params; i++) {
