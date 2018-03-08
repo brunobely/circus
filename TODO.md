@@ -18,3 +18,5 @@
 
 - [ ] Use recursive `make`
   * [See this GNU Make Reference Manual page](https://www.gnu.org/software/make/manual/html_node/Recursion.html)
+
+- [ ] Create `irc_svconn` and `irc_chconn` that represent, respectively, a server connection and a channel connection
