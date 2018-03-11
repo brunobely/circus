@@ -9,6 +9,7 @@
 
 #include "constants.h"
 #include "circus.h"
+#include "irc.h"
 // #include "str.h"
 #include "error.h"
 #include "util.h"
@@ -27,7 +28,6 @@ int ircbuf_len;
 struct message_q* q;
 
 void circus();
-int ircconnect();
 /* Returns -1 on error, 0 on success, CCODE_EXIT on !exit command */
 int user_read();
 int ircread();
@@ -70,8 +70,8 @@ void circus() {
 	if (connect(sockfd, (struct sockaddr*) &serv_addr, sizeof(serv_addr)) < 0)
 		error("connect");
 
-	if (ircconnect() < 0)
-		error("ircconnect");
+	if (ircregister(sockfd) < 0)
+		error("ircregister");
 
 	ircbuf[0] = '\0';
 	ircbuf_len = 0;
@@ -141,15 +141,6 @@ void circus() {
 			perror("select");
 		}
 	}
-}
-
-int ircconnect() {
-	char buffer[MSG_MAXSIZE];
-	sprintf(buffer, "NICK %s\r\nUSER %s 0 * :%s\r\n", NICKNAME, USERNAME, REALNAME);
-	if (write(sockfd, buffer, strlen(buffer)) < 0)
-		return ERR_SOCKETWRITE;
-
-	return 0;
 }
 
 int user_read() {
@@ -247,12 +238,8 @@ int ircsendmessage(struct irc_message m) {
 }
 
 int ircjoinch(char* ch) {
-	struct irc_message m;
-	strcpy(m.command, "JOIN");
-	strncpy(m.params[0], ch, MSG_MAXSIZE-1);
-	m.n_params = 1;
 	// TODO: store list of users in a data structure to allow later querying
-	return ircsendmessage(m);
+	return ircsendmessage(ircmessage("JOIN", 1, (const char* []){ ch }));
 }
 
 void ircclosesocket() {
@@ -332,10 +319,10 @@ int handlemessage(const char* message) {
 	/* command responses */
 	if (strcmp(command, IRC_PING) == 0) {
 		// TODO: handle errors
-		struct irc_message m;
-		strcpy(m.command, "PONG");
-		strncpy(m.params[0], params[0], MSG_MAXSIZE-1);
-		m.n_params = 1;
+		struct irc_message m = ircmessage("PONG", 1, (const char* []){ params[0] });
+		// strcpy(m.command, "PONG");
+		// strncpy(m.params[0], params[0], MSG_MAXSIZE-1);
+		// m.n_params = 1;
 		enqueue(q, m);
 		// sprintf(response, "PONG %s\r\n", params[0]);
 		// return ircwrite(response);
