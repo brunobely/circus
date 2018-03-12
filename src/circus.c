@@ -21,8 +21,8 @@
 // 	char params[15][MSG_MAXSIZE];
 // }
 
+// TODO: put these inside sv connection
 int sockfd;
-// TODO: maybe put these inside ircread as static variables?
 char ircbuf[MSG_MAXSIZE*2];
 int ircbuf_len;
 struct message_q* q;
@@ -30,11 +30,8 @@ struct message_q* q;
 void circus();
 /* Returns -1 on error, 0 on success, CCODE_EXIT on !exit command */
 int user_read();
-int ircread();
 int ircwrite(char* s);
 int ircsendmessage(struct irc_message m);
-/* Closes sockfd and sets its value to -1 */
-void ircclosesocket();
 int handlemessage(const char* message);
 
 // TODO: clean this up and refactor
@@ -117,7 +114,7 @@ void circus() {
 					fprintf(stderr, "error: user_read\n");
 			}
 			if (FD_ISSET(sockfd, &rd_set)) {
-				status = ircread();
+				status = ircread(sockfd, ircbuf_len, ircbuf, q);
 				if (status == ERR_NOSOCKET) {
 					// TODO: try reconnecting
 					printf("No socket, exiting.\n");
@@ -159,70 +156,6 @@ int user_read() {
 	return 0;
 }
 
-/*
-   ircread uses the persistent buffer ircbuf to store what is read from
-   the socket across calls. Any time a newline is found, the function
-   extracts that message from the buffer and calls handlemessage() with
-   it. It does so until there are no more new lines in the permanent
-   buffer.
-*/
-int ircread() {
-	int n;
-	char buffer[MSG_MAXSIZE];
-	char message[MSG_MAXSIZE];
-	char* crlf;
-
-	if (sockfd < 0)
-		return ERR_NOSOCKET;
-
-	memset(buffer, 0, sizeof(buffer));
-
-	debug_print("server - %d: ", sockfd);
-
-	if ((n = read(sockfd, buffer, sizeof(buffer)-1)) > 0) {
-		buffer[n] = '\0';
-		debug_print("\n\tircbuf_len: %d\n\n\tn: %d\n", ircbuf_len, n);
-		strncpy(ircbuf+ircbuf_len, buffer, n+1); /* n+1 to capture the '\0' */
-		ircbuf_len += n;
-
-		debug_print("\n\tbuffer: %s|||||\n", buffer);
-		debug_print("\n\tircbuf: %s|||||\n", ircbuf);
-
-		/* we have a message! */
-		while ((crlf = strpbrk(ircbuf, "\r\n")) != NULL) {
-			int index = crlf - ircbuf;
-			int status;
-		
-			debug_print("\n\tindex: %d\n", index);
-
-			strncpy(message, ircbuf, index);
-			message[index] = '\0';
-
-			ircbuf_len -= index;
-			memmove(ircbuf, ircbuf+index, ircbuf_len+1); /* ircbuf_len+1 to capture the '\0' */
-			ircbuf_len -= trim_left(ircbuf);
-			ircbuf[ircbuf_len]='\0';
-
-			debug_print("\n-----> passing message: ||%s||\n", message);
-			if ((status = handlemessage(message)) < 0)
-				return status;
-		}
-	}
-	else {
-		ircclosesocket();
-		if (n == 0) {
-			/* socket closed on other end, close here and try reconnecting */
-			return ERR_NOSOCKET;
-		}
-		else { /* n < 0 */
-			/* error reading from socket, close socket and try reconnecting */
-			return ERR_BADREAD;
-		}
-	}
-
-	return 0;
-}
-
 int ircwrite(char* s) {
 	printf("SENDING THIS TO SERVER: %s\n", s);
 	if (write(sockfd, s, strlen(s)) < 0) {
@@ -237,14 +170,9 @@ int ircsendmessage(struct irc_message m) {
 	return ircwrite(msg);
 }
 
-int ircjoinch(char* ch) {
-	// TODO: store list of users in a data structure to allow later querying
-	return ircsendmessage(ircmessage("JOIN", 1, (const char* []){ ch }));
-}
-
-void ircclosesocket() {
-	close(sockfd);
-	sockfd = -1;
+int ircjoinch(const char* ch) {
+	// TODO: store list of users in a data structure to allow for later querying
+	return ircsendmessage(ircmessage("JOIN", 1, &ch));
 }
 
 int handlemessage(const char* message) {
@@ -318,8 +246,9 @@ int handlemessage(const char* message) {
 	
 	/* command responses */
 	if (strcmp(command, IRC_PING) == 0) {
+		const char* param = &(params[0][0]);
 		// TODO: handle errors
-		struct irc_message m = ircmessage("PONG", 1, (const char* []){ params[0] });
+		struct irc_message m = ircmessage("PONG", 1, &param);
 		// strcpy(m.command, "PONG");
 		// strncpy(m.params[0], params[0], MSG_MAXSIZE-1);
 		// m.n_params = 1;

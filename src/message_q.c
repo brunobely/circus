@@ -5,6 +5,7 @@
 #include "error.h"
 #include "message_q.h"
 
+// TODO: use static memory instead?
 struct message_q* message_q() {
     struct message_q* q = malloc(sizeof(struct message_q));
     q->first = NULL;
